@@ -39,9 +39,9 @@ public class ClaimConfig extends GlobalConfiguration {
     public boolean configure(StaplerRequest req, JSONObject formData) throws FormException {
         // To persist global configuration information,
         // set that to properties and call save().
-        sendEmails = formData.getBoolean("sendEmails");
+//        sendEmails = formData.getBoolean("sendEmails");
         stickyByDefault = formData.getBoolean("stickyByDefault");
-        groovyScript = formData.getString("groovyScript");
+//        groovyScript = formData.getString("groovyScript");
         save();
         return super.configure(req,formData);
     }

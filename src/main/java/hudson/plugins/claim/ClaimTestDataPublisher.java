@@ -5,6 +5,7 @@ import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
 import hudson.model.Descriptor;
+import hudson.model.Result;
 import hudson.model.Saveable;
 import hudson.tasks.junit.CaseResult;
 import hudson.tasks.junit.TestAction;
@@ -12,14 +13,14 @@ import hudson.tasks.junit.TestDataPublisher;
 import hudson.tasks.junit.TestObject;
 import hudson.tasks.junit.TestResult;
 import hudson.tasks.junit.TestResultAction;
+import hudson.tasks.test.AbstractTestResultAction;
+import org.kohsuke.stapler.DataBoundConstructor;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.kohsuke.stapler.DataBoundConstructor;
 
 public class ClaimTestDataPublisher extends TestDataPublisher {
 
@@ -34,6 +35,12 @@ public class ClaimTestDataPublisher extends TestDataPublisher {
 
         for (CaseResult result: testResult.getFailedTests()) {
             CaseResult previous = result.getPreviousResult();
+            AbstractBuild<?,?> b = build;
+            while (previous == null && (b = b.getPreviousBuild()) != null) {
+                previous = (CaseResult) result.getResultInBuild(b);
+                if (b.getResult().isBetterOrEqualTo(Result.UNSTABLE)) break;
+            }
+
             if (previous != null) {
                 ClaimTestAction previousAction = previous.getTestAction(ClaimTestAction.class);
                 if (previousAction != null && previousAction.isClaimed() && previousAction.isSticky()) {

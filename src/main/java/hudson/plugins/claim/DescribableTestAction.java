@@ -48,7 +48,7 @@ public abstract class DescribableTestAction extends TestAction implements Descri
 			if (currentUser != null) {
 				items.add(currentUser.getDisplayName(), currentUser.getId());
 			}
-			
+			/*
 			Collection<User> c = User.getAll();
 			if (c != null && currentUser != null) {
 				if (c.contains(currentUser)) {
@@ -63,6 +63,7 @@ public abstract class DescribableTestAction extends TestAction implements Descri
 					items.add(u.getDisplayName(), u.getId());
 				}
 			}
+			*/
 
 			return items;
 
