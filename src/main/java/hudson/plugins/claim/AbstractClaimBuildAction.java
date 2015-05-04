@@ -5,6 +5,7 @@ import groovy.lang.GroovyShell;
 import hudson.model.BuildBadgeAction;
 import hudson.model.Describable;
 import hudson.model.ProminentProjectAction;
+import hudson.model.Run;
 import hudson.model.Saveable;
 import hudson.model.Hudson;
 import hudson.model.User;
@@ -18,6 +19,7 @@ import java.util.logging.Logger;
 import javax.mail.MessagingException;
 import javax.servlet.ServletException;
 
+import hudson.util.LRUStringConverter;
 import org.acegisecurity.Authentication;
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.StaplerRequest;
@@ -25,12 +27,16 @@ import org.kohsuke.stapler.StaplerResponse;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
 
-@ExportedBean(defaultVisibility = 2)
+@ExportedBean(defaultVisibility = 5)
 public abstract class AbstractClaimBuildAction<T extends Saveable> extends DescribableTestAction implements BuildBadgeAction,
         ProminentProjectAction, Describable<DescribableTestAction> {
 
     private static final long serialVersionUID = 1L;
     private static final Logger LOGGER = Logger.getLogger("claim-plugin");
+
+    static {
+        Run.XSTREAM.registerLocalConverter(AbstractClaimBuildAction.class, "reason", new LRUStringConverter());
+    }
 
     private boolean claimed;
     private String claimedBy;
@@ -107,6 +113,7 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
     	return assignedBy;
     }
 
+	@Exported
     public String getClaimedByName() {
         User user = User.get(claimedBy, false,Collections.EMPTY_MAP);
         if (user != null) {
@@ -201,6 +208,7 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
         this.transientClaim = transientClaim;
     }
 
+	@Exported
     public boolean isSticky() {
         return !transientClaim;
     }
