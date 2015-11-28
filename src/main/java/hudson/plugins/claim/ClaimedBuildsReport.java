@@ -1,6 +1,7 @@
 package hudson.plugins.claim;
 
 import hudson.Extension;
+import hudson.model.AbstractProject;
 import hudson.model.Action;
 import hudson.model.Api;
 import hudson.model.Job;
@@ -21,9 +22,15 @@ import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
 
-@Extension
 @ExportedBean(defaultVisibility = 9)
-public class ClaimedBuildsReport implements RootAction {
+public class ClaimedBuildsReport implements Action {
+
+//    @Extension
+    public static class RootClaimedBuildsReport extends ClaimedBuildsReport implements RootAction {
+        public String getIconFileName() {
+            return null;
+        }
+    }
 
     public ClaimedBuildsReport() {
     }
@@ -33,7 +40,7 @@ public class ClaimedBuildsReport implements RootAction {
     }
 
     public String getUrlName() {
-        return "/claims";
+        return "claims";
     }
 
     public static Run getFirstFail(Run r) {
@@ -73,8 +80,7 @@ public class ClaimedBuildsReport implements RootAction {
 
     public RunList getBuilds() {
         List<Run> lastBuilds = new ArrayList<Run>();
-        for (Job item : Jenkins.getInstance().getAllItems(Job.class)) {
-            Job job = (Job) item;
+        for (AbstractProject job : Jenkins.getInstance().getAllItems(AbstractProject.class)) {
             Run lb = job.getLastBuild();
             while (lb != null && (lb.hasntStartedYet() || lb.isBuilding()))
                 lb = lb.getPreviousBuild();
@@ -139,7 +145,8 @@ public class ClaimedBuildsReport implements RootAction {
 
         @Exported
         public String getFailingSince() {
-            return getFirstFail(run).getTimestampString2();
+            Run firstFail = getFirstFail(run);
+            return firstFail != null ? firstFail.getTimestampString2() : null;
         }
 
         @Exported

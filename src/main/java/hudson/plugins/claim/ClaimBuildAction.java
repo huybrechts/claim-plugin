@@ -2,6 +2,7 @@ package hudson.plugins.claim;
 
 import java.io.ObjectStreamException;
 
+import hudson.model.AbstractBuild;
 import hudson.model.Api;
 import hudson.model.Run;
 
@@ -39,4 +40,10 @@ public class ClaimBuildAction extends AbstractClaimBuildAction<Run> {
     public Api getApi() {
         return new Api(new ClaimedBuildsReport.ClaimReportEntry(owner));
     }
+
+    @Override
+    public AbstractBuild<?, ?> getBuild() {
+        return (AbstractBuild<?,?>) owner;
+    }
+
 }

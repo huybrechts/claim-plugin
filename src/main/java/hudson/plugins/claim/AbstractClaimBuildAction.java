@@ -2,23 +2,16 @@ package hudson.plugins.claim;
 
 import groovy.lang.Binding;
 import groovy.lang.GroovyShell;
+import hudson.MarkupText;
+import hudson.model.AbstractBuild;
 import hudson.model.BuildBadgeAction;
 import hudson.model.Describable;
+import hudson.model.Hudson;
 import hudson.model.ProminentProjectAction;
 import hudson.model.Run;
 import hudson.model.Saveable;
-import hudson.model.Hudson;
 import hudson.model.User;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.Date;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import javax.mail.MessagingException;
-import javax.servlet.ServletException;
-
+import hudson.scm.ChangeLogAnnotator;
 import hudson.util.LRUStringConverter;
 import org.acegisecurity.Authentication;
 import org.apache.commons.lang.StringUtils;
@@ -26,6 +19,14 @@ import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
+
+import javax.mail.MessagingException;
+import javax.servlet.ServletException;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Date;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @ExportedBean(defaultVisibility = 5)
 public abstract class AbstractClaimBuildAction<T extends Saveable> extends DescribableTestAction implements BuildBadgeAction,
@@ -52,6 +53,8 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
 
     private String reason;
 
+    public abstract AbstractBuild<?, ?> getBuild();
+
     public String getIconFileName() {
         return null;
     }
@@ -59,7 +62,7 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
     public String getUrlName() {
         return "claim";
     }
-    
+
     abstract String getUrl();
 
     public void doClaim(StaplerRequest req, StaplerResponse resp)
@@ -87,11 +90,11 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
         } catch (MessagingException e) {
             LOGGER.log(Level.WARNING, "Exception encountered sending assignment email: " + e.getMessage());
         } catch (InterruptedException e) {
-            LOGGER.log(Level.WARNING, "Interrupted when sending assignment email",e);
+            LOGGER.log(Level.WARNING, "Interrupted when sending assignment email", e);
         }
         owner.save();
         evalGroovyScript();
-        
+
         resp.forwardToPreviousPage(req);
     }
 
@@ -107,24 +110,24 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
     public String getClaimedBy() {
         return claimedBy;
     }
-    
+
     @Exported
     public String getAssignedBy() {
-    	return assignedBy;
+        return assignedBy;
     }
 
-	@Exported
+    @Exported
     public String getClaimedByName() {
-        User user = User.get(claimedBy, false,Collections.EMPTY_MAP);
+        User user = User.get(claimedBy, false, Collections.EMPTY_MAP);
         if (user != null) {
             return user.getDisplayName();
         } else {
             return claimedBy;
         }
     }
-    
+
     public String getAssignedByName() {
-        User user = User.get(assignedBy, false,Collections.EMPTY_MAP);
+        User user = User.get(assignedBy, false, Collections.EMPTY_MAP);
         if (user != null) {
             return user.getDisplayName();
         } else {
@@ -135,9 +138,9 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
     public void setClaimedBy(String claimedBy) {
         this.claimedBy = claimedBy;
     }
-    
-    public void setAssignedBy (String assignedBy) {
-    	this.assignedBy = assignedBy;
+
+    public void setAssignedBy(String assignedBy) {
+        this.assignedBy = assignedBy;
     }
 
     @Exported
@@ -152,6 +155,15 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
         this.transientClaim = !sticky;
         this.claimDate = new Date();
         this.assignedBy = assignedBy;
+
+        for (ClaimListener listener : ClaimListener.all()) {
+            try {
+                listener.claimed(this);
+            } catch (Throwable t) {
+                LOGGER.log(Level.SEVERE, "ClaimListener failed", t);
+            }
+        }
+
     }
 
     /**
@@ -168,6 +180,15 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
         this.claimDate = null;
         this.assignedBy = null;
         // we remember the reason to show it if someone reclaims this build.
+
+        for (ClaimListener listener : ClaimListener.all()) {
+            try {
+                listener.unclaimed(this);
+            } catch (Throwable t) {
+                LOGGER.log(Level.SEVERE, "ClaimListener failed", t);
+            }
+        }
+
     }
 
     public boolean isClaimedByMe() {
@@ -192,6 +213,17 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
         return reason;
     }
 
+    public String getReasonAnnotated() {
+        MarkupText text = new MarkupText(reason);
+        for (ChangeLogAnnotator ann : ChangeLogAnnotator.all()) {
+            try {
+                ann.annotate(getBuild(), null, text);
+            } catch (Exception e) {
+            }
+        }
+        return text.toString(false);
+    }
+
     public void setReason(String reason) {
         this.reason = reason;
     }
@@ -208,7 +240,7 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
         this.transientClaim = transientClaim;
     }
 
-	@Exported
+    @Exported
     public boolean isSticky() {
         return !transientClaim;
     }
@@ -225,25 +257,30 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
     public boolean hasClaimDate() {
         return this.claimDate != null;
     }
-    
+
+    public T getOwner() {
+        return owner;
+    }
+
     /**
      * was the action claimed by someone to themselves?
-     * @return true if the item was claimed by the user to themselves, false otherwise 
+     *
+     * @return true if the item was claimed by the user to themselves, false otherwise
      */
     public boolean isSelfAssigned() {
-    	boolean ret = true;
-    	if (! isClaimed()) {
-    		ret = false;
-    	} else if (getClaimedBy() == null) {
-    		ret = false;
-    	} else if (! getClaimedBy().equals(getAssignedBy())) {
-    		ret = false;
-    	}
-    	return ret;
+        boolean ret = true;
+        if (!isClaimed()) {
+            ret = false;
+        } else if (getClaimedBy() == null) {
+            ret = false;
+        } else if (!getClaimedBy().equals(getAssignedBy())) {
+            ret = false;
+        }
+        return ret;
     }
 
     public abstract String getNoun();
-    
+
     protected void evalGroovyScript() {
         ClaimConfig config = ClaimConfig.get();
         String groovyScript = config.getGroovyScript();
@@ -254,8 +291,21 @@ public abstract class AbstractClaimBuildAction<T extends Saveable> extends Descr
             try {
                 shell.evaluate(groovyScript);
             } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Error evaluating Groovy script",e);
+                LOGGER.log(Level.WARNING, "Error evaluating Groovy script", e);
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        return "AbstractClaimBuildAction{" +
+                "claimed=" + claimed +
+                ", claimedBy='" + claimedBy + '\'' +
+                ", assignedBy='" + assignedBy + '\'' +
+                ", claimDate=" + claimDate +
+                ", transientClaim=" + transientClaim +
+                ", owner=" + owner +
+                ", reason='" + reason + '\'' +
+                "} ";
     }
 }
